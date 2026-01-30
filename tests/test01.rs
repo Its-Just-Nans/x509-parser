@@ -1,3 +1,8 @@
+//! This test is not running on wasm32 because `parser02` need a big usize
+//! Therefore on wasm32 target it triggers a compilation error:
+//! literal out of range for `usize``
+#![cfg(not(target_arch = "wasm32"))]
+
 use nom::bytes::complete::take;
 
 #[test]

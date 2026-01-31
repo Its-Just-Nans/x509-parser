@@ -132,5 +132,6 @@ jobs:
           key: ${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
       - uses: dtolnay/rust-toolchain@stable
       - run: rustup target add wasm32-unknown-unknown
+      - run: cargo add wasm-bindgen-test --dev --locked # ensure dependency is present
       - run: cargo install wasm-pack --locked
       - run: wasm-pack test --node

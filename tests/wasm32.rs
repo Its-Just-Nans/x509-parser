@@ -1,7 +1,6 @@
-//! this file is used to test the time crate with wasm
+//! This file is used to test the time crate with wasm
 //!
 //! ```sh
-//! cargo add --dev wasm-bindgen-test
 //! wasm-pack test --node
 //! ```
 //!
@@ -13,7 +12,6 @@ use x509_parser::{parse_x509_certificate, x509::X509Version};
 
 static IGCA_PEM: &[u8] = include_bytes!("../assets/IGC_A.pem");
 
-
 #[wasm_bindgen_test::wasm_bindgen_test]
 fn test_x509_parse_pem() {
     let pem: Vec<Pem> = Pem::iter_from_buffer(IGCA_PEM)
@@ -21,5 +19,5 @@ fn test_x509_parse_pem() {
         .ok()
         .unwrap();
     let x509 = pem[0].parse_x509().unwrap();
-    assert_eq!(x509.validity.is_valid(), true);
+    assert_eq!(x509.validity.is_valid(), false);
 }

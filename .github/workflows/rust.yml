@@ -6,7 +6,7 @@ on:
   merge_group:
   workflow_dispatch:
   schedule:
-    - cron: '0 18 * * *'
+    - cron: "0 18 * * *"
 
 jobs:
   check:
@@ -16,7 +16,7 @@ jobs:
       matrix:
         rust:
           - stable
-          - 1.67.1
+          - 1.85
           - nightly
     steps:
       - uses: actions/checkout@v4
@@ -41,8 +41,7 @@ jobs:
     strategy:
       matrix:
         rust:
-          - stable
-          - 1.67.1
+          - 1.85
           - nightly
     steps:
       - uses: actions/checkout@v4
@@ -51,14 +50,19 @@ jobs:
           toolchain: ${{ matrix.rust }}
       - run: RUSTFLAGS="-D warnings" cargo check --locked --all-targets --all-features
 
-  test:
-    name: Test Suite
-    needs: check
+  # Also covers `check-all-features` on stable: the powerset includes every
+  # combination except pairing the two aws-lc-rs backends, and the
+  # `--all-features` pairing is exercised by the `test_features` job.
+  feature-powerset:
+    name: Check feature powerset
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo test --locked --all-features
+      - uses: taiki-e/install-action@cargo-hack
+      # The two aws-lc-rs backends are never used together outside of
+      # --all-features builds, so skip those combinations.
+      - run: RUSTFLAGS="-D warnings" cargo hack check --locked --all-targets --feature-powerset --mutually-exclusive-features verify-aws,verify-aws-fips
 
   test_features:
     name: Test suite (with features)
@@ -72,12 +76,28 @@ jobs:
           - --all-features
           - --features=verify
           - --features=verify-aws
+          - --features=verify-aws-fips
           - --features=validate
     steps:
       - uses: actions/checkout@v4
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
       - run: cargo test --locked ${{ matrix.features }}
+
+  test_fips:
+    name: verify-aws-fips dependency on FIPS backend only
+    needs: check-all-features
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+      # Ensure the non-FIPS aws-lc-sys crate is not part of the dependency tree.
+      #
+      # "cargo tree" exits 101 when queried for a crate that's not in the tree.
+      - run: "if cargo tree --features=verify-aws-fips -i aws-lc-sys; then false; else [ $? -eq 101 ]; fi"
+      # Ensure the optional FIPS crypto module is depended.
+      - run: "cargo tree --features=verify-aws-fips -i aws-lc-fips-sys"
 
   fmt:
     name: Rustfmt
@@ -99,6 +119,18 @@ jobs:
         with:
           components: clippy
       - run: cargo clippy --locked --all-features -- -D warnings
+
+  readme:
+    name: Check if README is up to date
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: dtolnay/rust-toolchain@stable
+      - run: |
+          cargo install cargo-rdme
+          cargo rdme install-rust-toolchain-for-intralinks
+          cargo rdme --intralinks-features validate,verify,verify-aws -c
 
   doc:
     name: Build documentation

@@ -5,15 +5,21 @@ use oid_registry::{
     OID_EC_P256, OID_NIST_EC_P384, OID_NIST_HASH_SHA256, OID_NIST_HASH_SHA384,
     OID_NIST_HASH_SHA512, OID_PKCS1_RSASSAPSS, OID_PKCS1_SHA1WITHRSA, OID_PKCS1_SHA256WITHRSA,
     OID_PKCS1_SHA384WITHRSA, OID_PKCS1_SHA512WITHRSA, OID_SHA1_WITH_RSA, OID_SIG_ECDSA_WITH_SHA256,
-    OID_SIG_ECDSA_WITH_SHA384, OID_SIG_ED25519,
+    OID_SIG_ECDSA_WITH_SHA384, OID_SIG_ECDSA_WITH_SHA512, OID_SIG_ED25519,
 };
+// P-521 is only supported by aws-lc-rs
+#[cfg(any(feature = "verify-aws", feature = "verify-aws-fips"))]
+use oid_registry::OID_NIST_EC_P521;
 
 // Since the `signature` object is similar in ring and in aws-lc-rs, we just use simple logic
 // to determine which one to use.
 // If both verify and verify-aws features are enabled, aws will be used.
-#[cfg(feature = "verify-aws")]
+#[cfg(any(feature = "verify-aws", feature = "verify-aws-fips"))]
 use aws_lc_rs::signature;
-#[cfg(all(feature = "verify", not(feature = "verify-aws")))]
+#[cfg(all(
+    feature = "verify",
+    not(any(feature = "verify-aws", feature = "verify-aws-fips"))
+))]
 use ring::signature;
 
 /// Verify the cryptographic signature of the raw data (can be a certificate, a CRL or a CSR).
@@ -53,6 +59,9 @@ pub fn verify_signature(
     } else if *signature_algorithm == OID_SIG_ECDSA_WITH_SHA384 {
         get_ec_curve_sha(&public_key.algorithm, 384)
             .ok_or(X509Error::SignatureUnsupportedAlgorithm)?
+    } else if *signature_algorithm == OID_SIG_ECDSA_WITH_SHA512 {
+        get_ec_curve_sha(&public_key.algorithm, 512)
+            .ok_or(X509Error::SignatureUnsupportedAlgorithm)?
     } else if *signature_algorithm == OID_SIG_ED25519 {
         &signature::ED25519
     } else {
@@ -76,7 +85,6 @@ fn get_ec_curve_sha(
     sha_len: usize,
 ) -> Option<&'static dyn signature::VerificationAlgorithm> {
     let curve_oid = pubkey_alg.parameters.as_ref()?.as_oid().ok()?;
-    // let curve_oid = pubkey_alg.parameters.as_ref()?.as_oid().ok()?;
     if curve_oid == OID_EC_P256 {
         match sha_len {
             256 => Some(&signature::ECDSA_P256_SHA256_ASN1),
@@ -90,7 +98,23 @@ fn get_ec_curve_sha(
             _ => None,
         }
     } else {
-        None
+        #[cfg(any(feature = "verify-aws", feature = "verify-aws-fips"))]
+        {
+            if curve_oid == OID_NIST_EC_P521 {
+                match sha_len {
+                    256 => Some(&signature::ECDSA_P521_SHA256_ASN1),
+                    384 => Some(&signature::ECDSA_P521_SHA384_ASN1),
+                    512 => Some(&signature::ECDSA_P521_SHA512_ASN1),
+                    _ => None,
+                }
+            } else {
+                None
+            }
+        }
+        #[cfg(not(any(feature = "verify-aws", feature = "verify-aws-fips")))]
+        {
+            None
+        }
     }
 }
 

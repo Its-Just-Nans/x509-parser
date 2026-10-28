@@ -5,7 +5,11 @@ use crate::x509::{
     parse_signature_value, AlgorithmIdentifier, SubjectPublicKeyInfo, X509Name, X509Version,
 };
 
-#[cfg(any(feature = "verify", feature = "verify-aws"))]
+#[cfg(any(
+    feature = "verify",
+    feature = "verify-aws",
+    feature = "verify-aws-fips"
+))]
 use crate::verify::verify_signature;
 use asn1_rs::{
     BitString, DerParser, FromDer, Header, Input, Oid, OptTaggedImplicit, Sequence, Tag, Tagged,
@@ -83,8 +87,19 @@ impl<'a> X509CertificationRequest<'a> {
     ///
     /// Uses the public key contained in the CSR, which must be the one of the entity
     /// requesting the certification for this verification to succeed.
-    #[cfg(any(feature = "verify", feature = "verify-aws"))]
-    #[cfg_attr(docsrs, doc(cfg(any(feature = "verify", feature = "verify-aws"))))]
+    #[cfg(any(
+        feature = "verify",
+        feature = "verify-aws",
+        feature = "verify-aws-fips"
+    ))]
+    #[cfg_attr(
+        docsrs,
+        doc(cfg(any(
+            feature = "verify",
+            feature = "verify-aws",
+            feature = "verify-aws-fips"
+        )))
+    )]
     pub fn verify_signature(&self) -> Result<(), X509Error> {
         let spki = &self.certification_request_info.subject_pki;
         verify_signature(
@@ -192,26 +207,26 @@ pub struct X509CertificationRequestInfo<'a> {
 }
 
 impl X509CertificationRequestInfo<'_> {
-    /// Get the CRL entry extensions.
+    /// Get the CSR attributes.
     #[inline]
     pub fn attributes(&self) -> &[X509CriAttribute<'_>] {
         &self.attributes
     }
 
-    /// Returns an iterator over the CRL entry extensions
+    /// Returns an iterator over the CSR attributes
     #[inline]
     pub fn iter_attributes(&self) -> impl Iterator<Item = &X509CriAttribute<'_>> {
         self.attributes.iter()
     }
 
-    /// Searches for a CRL entry extension with the given `Oid`.
+    /// Searches for a CSR attribute with the given `Oid`.
     ///
     /// Note: if there are several extensions with the same `Oid`, the first one is returned.
     pub fn find_attribute(&self, oid: &Oid) -> Option<&X509CriAttribute<'_>> {
         self.attributes.iter().find(|&ext| ext.oid == *oid)
     }
 
-    /// Builds and returns a map of CRL entry extensions.
+    /// Builds and returns a map of CSR attributes.
     ///
     /// If an extension is present twice, this will fail and return `DuplicateExtensions`.
     pub fn attributes_map(&self) -> Result<HashMap<Oid<'_>, &X509CriAttribute<'_>>, X509Error> {

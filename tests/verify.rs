@@ -1,4 +1,8 @@
-#![cfg(any(feature = "verify", feature = "verify-aws"))]
+#![cfg(any(
+    feature = "verify",
+    feature = "verify-aws",
+    feature = "verify-aws-fips"
+))]
 
 use x509_parser::parse_x509_certificate;
 
@@ -64,6 +68,19 @@ fn test_signature_verification_rsa_pss_sha512() {
     let (_, x509) =
         parse_x509_certificate(RSA_PSS_SELF_SIGNED_SHA512).expect("could not parse certificate");
     let res = x509.verify_signature(None);
+    eprintln!("Verification: {res:?}");
+    assert!(res.is_ok());
+}
+
+#[cfg(any(feature = "verify-aws", feature = "verify-aws-fips"))]
+static P521_SELF_SIGNED_DER: &[u8] = include_bytes!("../assets/p521-selfsigned.der");
+
+#[cfg(any(feature = "verify-aws", feature = "verify-aws-fips"))]
+#[test]
+fn test_signature_verification_p521() {
+    let (_, x509_ca) =
+        parse_x509_certificate(P521_SELF_SIGNED_DER).expect("could not parse certificate");
+    let res = x509_ca.verify_signature(None);
     eprintln!("Verification: {res:?}");
     assert!(res.is_ok());
 }
